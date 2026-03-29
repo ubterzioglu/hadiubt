@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 const GOOGLE_COLORS = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"];
 const MATRIX_CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF";
 const FONT_SIZE = 22;
-const SPEED_MIN = 0.4;
-const SPEED_MAX = 0.7;
+const SPEED_MIN = 0.15;
+const SPEED_MAX = 0.25;
 
 const CodeRain = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -73,7 +73,7 @@ const CodeRain = () => {
 
         if (y > canvas.offsetHeight && Math.random() > 0.95) {
           drops[i] = 0;
-          speeds[i] = 0.8 + Math.random() * 1.2;
+          speeds[i] = 0.3 + Math.random() * 0.4;
           colors[i] = GOOGLE_COLORS[Math.floor(Math.random() * 4)];
           trails[i] = 8 + Math.floor(Math.random() * 16);
         }
