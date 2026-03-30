@@ -1,13 +1,22 @@
 import { motion } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
+import { Github, Linkedin, FileText, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 
-const STAR_COUNT = 150;
-const STAR_SIZES = [1, 2, 3];
-const STAR_COLORS = ["#ffffff", "#ffffd4", "#ffd4d4", "#d4d4ff", "#d4ffff"];
-const TWINKLE_SPEED = 0.02;
+// Particle system for interactive background
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  opacity: number;
+}
 
-const StarField = () => {
+const ParticleField = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mouseRef = useRef({ x: 0, y: 0 });
+  const particlesRef = useRef<Particle[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -16,85 +25,95 @@ const StarField = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let animId: number;
-    let stars: Array<{
-      x: number;
-      y: number;
-      size: number;
-      color: string;
-      opacity: number;
-      twinkleSpeed: number;
-      twinklePhase: number;
-    }> = [];
+    let animationId: number;
+    const particleCount = 80;
+    const connectionDistance = 150;
+    const mouseInfluence = 100;
 
     const resize = () => {
       canvas.width = canvas.offsetWidth * window.devicePixelRatio;
       canvas.height = canvas.offsetHeight * window.devicePixelRatio;
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-      
-      // Generate stars if not already generated
-      if (stars.length === 0) {
-        stars = Array.from({ length: STAR_COUNT }, () => ({
-          x: Math.random() * canvas.offsetWidth,
-          y: Math.random() * canvas.offsetHeight,
-          size: STAR_SIZES[Math.floor(Math.random() * STAR_SIZES.length)],
-          color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
-          opacity: Math.random() * 0.8 + 0.2,
-          twinkleSpeed: Math.random() * 0.02 + 0.01,
-          twinklePhase: Math.random() * Math.PI * 2
-        }));
-      }
+    };
+
+    const initParticles = () => {
+      particlesRef.current = Array.from({ length: particleCount }, () => ({
+        x: Math.random() * canvas.offsetWidth,
+        y: Math.random() * canvas.offsetHeight,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        size: Math.random() * 2 + 1,
+        opacity: Math.random() * 0.5 + 0.2,
+      }));
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+    };
+
+    const draw = () => {
+      ctx.fillStyle = "rgba(11, 17, 32, 0.1)";
+      ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
+
+      particlesRef.current.forEach((particle, i) => {
+        // Mouse influence
+        const dx = mouseRef.current.x - particle.x;
+        const dy = mouseRef.current.y - particle.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < mouseInfluence) {
+          const force = (mouseInfluence - dist) / mouseInfluence;
+          particle.vx -= (dx / dist) * force * 0.02;
+          particle.vy -= (dy / dist) * force * 0.02;
+        }
+
+        // Update position
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+
+        // Boundary check
+        if (particle.x < 0 || particle.x > canvas.offsetWidth) particle.vx *= -1;
+        if (particle.y < 0 || particle.y > canvas.offsetHeight) particle.vy *= -1;
+
+        // Draw particle
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 242, 254, ${particle.opacity})`;
+        ctx.fill();
+
+        // Draw connections
+        particlesRef.current.slice(i + 1).forEach((other) => {
+          const dx = particle.x - other.x;
+          const dy = particle.y - other.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < connectionDistance) {
+            ctx.beginPath();
+            ctx.moveTo(particle.x, particle.y);
+            ctx.lineTo(other.x, other.y);
+            ctx.strokeStyle = `rgba(0, 242, 254, ${0.1 * (1 - dist / connectionDistance)})`;
+            ctx.stroke();
+          }
+        });
+      });
+
+      animationId = requestAnimationFrame(draw);
     };
 
     resize();
+    initParticles();
     window.addEventListener("resize", resize);
-
-    const draw = () => {
-      // Clear canvas with very dark background
-      ctx.fillStyle = "rgba(0, 0, 0, 0.98)";
-      ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
-
-      // Draw stars
-      stars.forEach(star => {
-        // Update twinkle phase
-        star.twinklePhase += star.twinkleSpeed;
-        
-        // Calculate opacity with sine wave for smooth twinkling
-        const twinkleOpacity = Math.sin(star.twinklePhase) * 0.3 + 0.7;
-        const currentOpacity = star.opacity * twinkleOpacity;
-        
-        // Draw star with glow effect
-        ctx.save();
-        ctx.globalAlpha = currentOpacity;
-        
-        // Draw glow
-        const gradient = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, star.size * 3);
-        gradient.addColorStop(0, star.color);
-        gradient.addColorStop(0.5, star.color + "40");
-        gradient.addColorStop(1, "transparent");
-        
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.size * 3, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Draw star core
-        ctx.fillStyle = star.color;
-        ctx.beginPath();
-        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.restore();
-      });
-
-      animId = requestAnimationFrame(draw);
-    };
-
+    canvas.addEventListener("mousemove", handleMouseMove);
     draw();
 
     return () => {
-      cancelAnimationFrame(animId);
+      cancelAnimationFrame(animationId);
       window.removeEventListener("resize", resize);
+      canvas.removeEventListener("mousemove", handleMouseMove);
     };
   }, []);
 
@@ -102,116 +121,170 @@ const StarField = () => {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full"
-      style={{ opacity: 1 }}
+      style={{ opacity: 0.6 }}
     />
   );
 };
 
 const HeroSection = () => {
-  const menuItems = [
-    { name: "About Me", href: "#about-me" },
-    { name: "Experience", href: "#experience" },
-    { name: "Tech Stack", href: "#tech-stack" },
-    { name: "Projects", href: "#projects" },
-    { name: "Contact", href: "#contact" }
-  ];
-
-  const slides = [
-    {
-      title: "QA Engineer",
-      subtitle: "Dortmund, Germany",
-      description: "Quality Assurance Professional"
-    },
-    {
-      title: "Automation Expert",
-      subtitle: "Test Automation",
-      description: "CI/CD & Testing"
-    },
-    {
-      title: "Problem Solver",
-      subtitle: "Critical Thinking",
-      description: "Analytical Skills"
-    }
-  ];
-
-  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 4000);
-    return () => clearInterval(interval);
+    setIsLoaded(true);
   }, []);
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.3,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 30 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.6, ease: "easeOut" },
+    },
+  };
+
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden px-4">
-      {/* Star field background */}
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      {/* Particle Field Background */}
       <div className="absolute inset-0 pointer-events-none">
-        <StarField />
-        <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/30 to-background" />
+        <ParticleField />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/20 to-background" />
       </div>
 
-      <div className="relative z-10 w-full max-w-6xl mx-auto px-4">
-        {/* Unified Card - Slideshow with Menu Buttons */}
-        <div className="relative h-64 lg:h-96 bg-gradient-to-br from-slate-900/50 to-slate-800/50 rounded-2xl p-6 border border-slate-700/50 backdrop-blur-sm">
-          {/* yeni.png image - 3x larger, positioned to end exactly at card bottom */}
-          <div className="absolute bottom-0 left-4">
-            <img
-              src="yeni.png"
-              alt="Hadi"
-              className="w-72 h-96 object-cover rounded-lg opacity-90"
-              style={{ clipPath: 'inset(0 0 0 0)' }}
-            />
-          </div>
-
-          {/* Slide indicators - moved higher */}
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-            {slides.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentSlide(index)}
-                className={`w-3 h-3 rounded-full transition-all ${
-                  index === currentSlide ? "bg-white" : "bg-white/50"
-                }`}
-                aria-label={`Go to slide ${index + 1}`}
-              />
-            ))}
-          </div>
-
-          {/* Menu buttons inside the card */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.6, delay: 0.8 }}
-            className="absolute right-6 top-1/2 transform -translate-y-1/2 space-y-4"
-          >
-            {menuItems.map((item, index) => (
-              <motion.a
-                key={item.name}
-                href={item.href}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.8 + index * 0.1 }}
-                className="block w-48 py-3 px-6 text-center bg-gradient-to-r from-primary/10 to-primary/20 hover:from-primary/20 hover:to-primary/30 rounded-lg border border-primary/20 hover:border-primary/40 transition-all duration-300 text-lg font-medium text-primary hover:text-primary/80"
-              >
-                {item.name}
-              </motion.a>
-            ))}
+      {/* Main Content */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate={isLoaded ? "visible" : "hidden"}
+        className="relative z-10 w-full max-w-6xl mx-auto px-4 py-20"
+      >
+        <div className="flex flex-col items-center text-center">
+          {/* Tagline */}
+          <motion.div variants={itemVariants} className="mb-6">
+            <span className="font-mono text-sm text-primary/70 tracking-wider">
+              {"// PORTFOLIO_2025"}
+            </span>
           </motion.div>
 
-          {/* Slideshow content area with Welcome heading */}
-          <div className="absolute top-6 left-6 right-6 bottom-24 flex items-center justify-center">
-            <motion.h1
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="text-5xl lg:text-7xl font-bold text-white text-center"
+          {/* Main Title */}
+          <motion.h1
+            variants={itemVariants}
+            className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4"
+          >
+            <span className="text-foreground">Uğur Terzioğlu</span>
+          </motion.h1>
+
+          {/* Subtitle with Gradient */}
+          <motion.div
+            variants={itemVariants}
+            className="text-xl md:text-2xl lg:text-3xl font-mono mb-8"
+          >
+            <span className="text-gradient-cyan">Architecting Scalable Systems</span>
+            <span className="inline-block w-3 h-6 ml-1 bg-primary animate-pulse" />
+          </motion.div>
+
+          {/* Description */}
+          <motion.p
+            variants={itemVariants}
+            className="text-muted-foreground text-lg md:text-xl max-w-2xl mb-12 leading-relaxed"
+          >
+            Senior Software QA Engineer with 15+ years in test management, automation, 
+            and enterprise systems. Specialized in Agile/SCRUM, CI/CD pipelines, and 
+            delivering high-quality software solutions.
+          </motion.p>
+
+          {/* CTA Buttons */}
+          <motion.div
+            variants={itemVariants}
+            className="flex flex-col sm:flex-row gap-4 mb-16"
+          >
+            <Link
+              to="/corporate-projects"
+              className="group px-8 py-4 bg-gradient-to-r from-primary to-secondary text-background font-semibold rounded-lg shadow-glow-cyan hover:shadow-glow-blue transition-all duration-300 flex items-center gap-2"
             >
-              Welcome
-            </motion.h1>
+              <span>Projeleri Gör</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+            <Link
+              to="/my-cv"
+              className="group px-8 py-4 border border-primary/30 text-primary font-semibold rounded-lg hover:border-primary hover:bg-primary/5 transition-all duration-300 flex items-center gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              <span>CV İndir</span>
+            </Link>
+          </motion.div>
+
+          {/* Social Links */}
+          <motion.div
+            variants={itemVariants}
+            className="flex items-center gap-6"
+          >
+            <a
+              href="https://linkedin.com/in/ubterzioglu"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors duration-300"
+            >
+              <div className="p-3 rounded-lg border border-border/50 group-hover:border-primary/50 group-hover:shadow-glow-cyan transition-all duration-300">
+                <Linkedin className="w-5 h-5" />
+              </div>
+              <span className="font-mono text-sm hidden sm:block">LinkedIn</span>
+            </a>
+            <a
+              href="https://github.com/ubterzioglu"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors duration-300"
+            >
+              <div className="p-3 rounded-lg border border-border/50 group-hover:border-primary/50 group-hover:shadow-glow-cyan transition-all duration-300">
+                <Github className="w-5 h-5" />
+              </div>
+              <span className="font-mono text-sm hidden sm:block">GitHub</span>
+            </a>
+          </motion.div>
+
+          {/* Tech Stack Preview */}
+          <motion.div
+            variants={itemVariants}
+            className="mt-16 flex flex-wrap justify-center gap-3"
+          >
+            {["Java", "Selenium", "JIRA", "Docker", "Jenkins", "Python"].map((tech, index) => (
+              <span
+                key={tech}
+                className="px-4 py-2 text-sm font-mono text-muted-foreground bg-card/50 border border-border/30 rounded-full hover:border-primary/50 hover:text-primary transition-all duration-300"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                {tech}
+              </span>
+            ))}
+          </motion.div>
+        </div>
+      </motion.div>
+
+      {/* Scroll Indicator */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.5, duration: 0.5 }}
+        className="absolute bottom-8 left-1/2 transform -translate-x-1/2"
+      >
+        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+          <span className="text-xs font-mono">Scroll</span>
+          <div className="w-6 h-10 border-2 border-border/50 rounded-full flex justify-center pt-2">
+            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" />
           </div>
         </div>
-      </div>
+      </motion.div>
     </section>
   );
 };
