@@ -1,13 +1,12 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 
-const GOOGLE_COLORS = ["#4285F4", "#EA4335", "#FBBC05", "#34A853"];
-const MATRIX_CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF";
-const FONT_SIZE = 22;
-const SPEED_MIN = 0.15;
-const SPEED_MAX = 0.25;
+const STAR_COUNT = 150;
+const STAR_SIZES = [1, 2, 3];
+const STAR_COLORS = ["#ffffff", "#ffffd4", "#ffd4d4", "#d4d4ff", "#d4ffff"];
+const TWINKLE_SPEED = 0.02;
 
-const CodeRain = () => {
+const StarField = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -18,67 +17,75 @@ const CodeRain = () => {
     if (!ctx) return;
 
     let animId: number;
-    let columns: number;
-    let drops: number[];
-    let speeds: number[];
-    let colors: string[];
-    let trails: number[];
+    let stars: Array<{
+      x: number;
+      y: number;
+      size: number;
+      color: string;
+      opacity: number;
+      twinkleSpeed: number;
+      twinklePhase: number;
+    }> = [];
 
     const resize = () => {
       canvas.width = canvas.offsetWidth * window.devicePixelRatio;
       canvas.height = canvas.offsetHeight * window.devicePixelRatio;
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-      columns = Math.floor(canvas.offsetWidth / FONT_SIZE);
-      drops = Array.from({ length: columns }, () => Math.random() * -50);
-      speeds = Array.from({ length: columns }, () => SPEED_MIN + Math.random() * (SPEED_MAX - SPEED_MIN));
-      colors = Array.from({ length: columns }, () => GOOGLE_COLORS[Math.floor(Math.random() * 4)]);
-      trails = Array.from({ length: columns }, () => 8 + Math.floor(Math.random() * 16));
+      
+      // Generate stars if not already generated
+      if (stars.length === 0) {
+        stars = Array.from({ length: STAR_COUNT }, () => ({
+          x: Math.random() * canvas.offsetWidth,
+          y: Math.random() * canvas.offsetHeight,
+          size: STAR_SIZES[Math.floor(Math.random() * STAR_SIZES.length)],
+          color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
+          opacity: Math.random() * 0.8 + 0.2,
+          twinkleSpeed: Math.random() * 0.02 + 0.01,
+          twinklePhase: Math.random() * Math.PI * 2
+        }));
+      }
     };
 
     resize();
     window.addEventListener("resize", resize);
 
     const draw = () => {
-      // Fade trail — lower alpha = longer trails
-      ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+      // Clear canvas with very dark background
+      ctx.fillStyle = "rgba(0, 0, 0, 0.98)";
       ctx.fillRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
-      ctx.font = `bold ${FONT_SIZE}px monospace`;
-
-      for (let i = 0; i < columns; i++) {
-        const char = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
-        const x = i * FONT_SIZE;
-        const y = drops[i] * FONT_SIZE;
-
-        // Bright head character
-        ctx.shadowColor = colors[i];
-        ctx.shadowBlur = 12;
-        ctx.fillStyle = "#fff";
-        ctx.globalAlpha = 0.9;
-        ctx.fillText(char, x, y);
-
-        // Trail characters (dimmer)
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = colors[i];
-        for (let t = 1; t < trails[i]; t++) {
-          const trailY = y - t * FONT_SIZE;
-          if (trailY < 0) break;
-          const trailChar = MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
-          ctx.globalAlpha = (0.6 / trails[i]) * (trails[i] - t);
-          ctx.fillText(trailChar, x, trailY);
-        }
-
-        ctx.globalAlpha = 1;
-        ctx.shadowBlur = 0;
-
-        if (y > canvas.offsetHeight && Math.random() > 0.95) {
-          drops[i] = 0;
-          speeds[i] = 0.3 + Math.random() * 0.4;
-          colors[i] = GOOGLE_COLORS[Math.floor(Math.random() * 4)];
-          trails[i] = 8 + Math.floor(Math.random() * 16);
-        }
-        drops[i] += speeds[i];
-      }
+      // Draw stars
+      stars.forEach(star => {
+        // Update twinkle phase
+        star.twinklePhase += star.twinkleSpeed;
+        
+        // Calculate opacity with sine wave for smooth twinkling
+        const twinkleOpacity = Math.sin(star.twinklePhase) * 0.3 + 0.7;
+        const currentOpacity = star.opacity * twinkleOpacity;
+        
+        // Draw star with glow effect
+        ctx.save();
+        ctx.globalAlpha = currentOpacity;
+        
+        // Draw glow
+        const gradient = ctx.createRadialGradient(star.x, star.y, 0, star.x, star.y, star.size * 3);
+        gradient.addColorStop(0, star.color);
+        gradient.addColorStop(0.5, star.color + "40");
+        gradient.addColorStop(1, "transparent");
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size * 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw star core
+        ctx.fillStyle = star.color;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
+      });
 
       animId = requestAnimationFrame(draw);
     };
@@ -95,82 +102,115 @@ const CodeRain = () => {
     <canvas
       ref={canvasRef}
       className="absolute inset-0 w-full h-full"
-      style={{ opacity: 0.5 }}
+      style={{ opacity: 1 }}
     />
   );
 };
 
 const HeroSection = () => {
+  const menuItems = [
+    { name: "About Me", href: "#about-me" },
+    { name: "Experience", href: "#experience" },
+    { name: "Tech Stack", href: "#tech-stack" },
+    { name: "Projects", href: "#projects" },
+    { name: "Contact", href: "#contact" }
+  ];
+
+  const slides = [
+    {
+      title: "QA Engineer",
+      subtitle: "Dortmund, Germany",
+      description: "Quality Assurance Professional"
+    },
+    {
+      title: "Automation Expert",
+      subtitle: "Test Automation",
+      description: "CI/CD & Testing"
+    },
+    {
+      title: "Problem Solver",
+      subtitle: "Critical Thinking",
+      description: "Analytical Skills"
+    }
+  ];
+
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden px-4">
-      {/* Code rain background */}
+      {/* Star field background */}
       <div className="absolute inset-0 pointer-events-none">
-        <CodeRain />
+        <StarField />
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/30 to-background" />
       </div>
 
-      <div className="relative z-10 text-center max-w-2xl mx-auto">
-        {/* Profile image */}
-        <motion.div
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.2 }}
-          className="mx-auto mb-8"
-        >
-          <div className="w-36 h-36 mx-auto rounded-full bg-gradient-hero p-1">
+      <div className="relative z-10 w-full max-w-6xl mx-auto px-4">
+        {/* Unified Card - Slideshow with Menu Buttons */}
+        <div className="relative h-64 lg:h-96 bg-gradient-to-br from-slate-900/50 to-slate-800/50 rounded-2xl p-6 border border-slate-700/50 backdrop-blur-sm">
+          {/* yeni.png image - 3x larger, positioned to end exactly at card bottom */}
+          <div className="absolute bottom-0 left-4">
             <img
-              src="https://ubterzioglu.de/img/picprofile.png"
-              alt="Umut Barış Terzioğlu"
-              className="w-full h-full rounded-full object-cover"
+              src="yeni.png"
+              alt="Hadi"
+              className="w-72 h-96 object-cover rounded-lg opacity-90"
+              style={{ clipPath: 'inset(0 0 0 0)' }}
             />
           </div>
-        </motion.div>
 
-        {/* Name */}
-        <motion.h1
-          initial={{ y: 30, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="text-4xl md:text-6xl font-bold tracking-tight mb-4"
-        >
-          Umut Barış{" "}
-          <span className="text-gradient">Terzioğlu</span>
-        </motion.h1>
+          {/* Slide indicators - moved higher */}
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+            {slides.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentSlide(index)}
+                className={`w-3 h-3 rounded-full transition-all ${
+                  index === currentSlide ? "bg-white" : "bg-white/50"
+                }`}
+                aria-label={`Go to slide ${index + 1}`}
+              />
+            ))}
+          </div>
 
-        {/* Tagline */}
-        <motion.p
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.6 }}
-          className="text-lg md:text-xl text-muted-foreground mb-3"
-        >
-          QA Engineer · Dortmund, Germany
-        </motion.p>
-
-        <motion.p
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.75 }}
-          className="text-sm text-muted-foreground/70 italic"
-        >
-          "Umut" means hope · "Barış" means peace 🕊️
-        </motion.p>
-
-        {/* Scroll indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2 }}
-          className="mt-16"
-        >
+          {/* Menu buttons inside the card */}
           <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="text-muted-foreground/40 text-sm"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.6, delay: 0.8 }}
+            className="absolute right-6 top-1/2 transform -translate-y-1/2 space-y-4"
           >
-            Who are you? Choose your path ↓
+            {menuItems.map((item, index) => (
+              <motion.a
+                key={item.name}
+                href={item.href}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.8 + index * 0.1 }}
+                className="block w-48 py-3 px-6 text-center bg-gradient-to-r from-primary/10 to-primary/20 hover:from-primary/20 hover:to-primary/30 rounded-lg border border-primary/20 hover:border-primary/40 transition-all duration-300 text-lg font-medium text-primary hover:text-primary/80"
+              >
+                {item.name}
+              </motion.a>
+            ))}
           </motion.div>
-        </motion.div>
+
+          {/* Slideshow content area with Welcome heading */}
+          <div className="absolute top-6 left-6 right-6 bottom-24 flex items-center justify-center">
+            <motion.h1
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8 }}
+              className="text-5xl lg:text-7xl font-bold text-white text-center"
+            >
+              Welcome
+            </motion.h1>
+          </div>
+        </div>
       </div>
     </section>
   );
